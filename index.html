@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mars Bingo Live</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <div class="live-caller-display">
+            <p>🔴 LIVE CALL</p>
+            <h1 id="current-number">--</h1>
+            <div id="call-history">Waiting for numbers...</div>
+        </div>
+        <div class="bingo-section">
+            <div class="bingo-header"><span>B</span><span>I</span><span>N</span><span>G</span><span>O</span></div>
+            <div id="bingo-grid" class="bingo-grid"></div>
+        </div>
+        <div class="brand-section">
+            <div class="brand-text"><h1>MARS BINGO</h1><p>LIVE ENGINE</p></div>
+            <div class="balance-display"><span id="user-balance">0</span> <small>ETB</small></div>
+        </div>
+        <button class="main-action" id="bingo-btn" onclick="claimWin()">CHECKING CARD...</button>
+    </div>
+    <script src="https://telegram.org"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+
