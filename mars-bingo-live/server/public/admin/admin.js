@@ -1,0 +1,9 @@
+const $=id=>document.getElementById(id); $('secret').value=localStorage.adminSecret||''; $('save').onclick=()=>{localStorage.adminSecret=$('secret').value; load();};
+async function api(path, opts={}){ const res=await fetch('/api/admin'+path,{...opts,headers:{'Content-Type':'application/json','x-admin-secret':localStorage.adminSecret||'',...(opts.headers||{})}}); if(!res.ok) throw new Error(await res.text()); return res.json(); }
+function money(c){ return (Number(c||0)/100).toFixed(2); }
+async function load(){ const stats=await api('/stats'); $('stats').innerHTML=`<div class="grid"><b>Users ${stats.users}</b><b>Balances ${stats.totalBalances}</b><b>Revenue ${stats.grossCardRevenue}</b></div>`; const users=await api('/users'); $('users').innerHTML=users.users.map(u=>`<article><b>${u.username||u.first_name||u.telegram_id}</b><span>${money(u.balance_cents)} ETB</span><button onclick="ban(${u.id},${u.banned?0:1})">${u.banned?'Unban':'Ban'}</button><button onclick="adjust(${u.id})">Adjust</button></article>`).join(''); const tx=await api('/transactions'); $('tx').innerHTML=tx.transactions.map(t=>`<article><b>${t.type} ${money(t.amount_cents)}</b><span>${t.status} · ${t.username||t.telegram_id}</span>${t.type==='deposit'&&t.status==='pending'?`<button onclick="approve(${t.id})">Approve</button>`:''}<button onclick="rejectTx(${t.id})">Reject</button></article>`).join(''); }
+async function ban(id,banned){ await api(`/users/${id}/ban`,{method:'POST',body:JSON.stringify({banned})}); load(); }
+async function adjust(id){ const amount=prompt('Adjustment amount ETB (negative allowed)'); if(amount) { await api(`/users/${id}/adjust`,{method:'POST',body:JSON.stringify({amount})}); load(); } }
+async function approve(id){ await api(`/deposits/${id}/approve`,{method:'POST',body:'{}'}); load(); }
+async function rejectTx(id){ await api(`/transactions/${id}/reject`,{method:'POST',body:'{}'}); load(); }
+load().catch(()=>{});

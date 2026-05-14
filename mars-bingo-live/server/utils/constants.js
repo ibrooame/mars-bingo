@@ -1,0 +1,5 @@
+const STATES = Object.freeze({ WAITING: 'waiting', COUNTDOWN: 'countdown', RUNNING: 'running', FINISHED: 'finished', PAYOUT: 'payout', NEXT_ROUND: 'next_round' });
+const TX_TYPES = Object.freeze({ DEPOSIT: 'deposit', WITHDRAWAL: 'withdrawal', CARD_PURCHASE: 'card_purchase', PAYOUT: 'payout', ADJUSTMENT: 'adjustment', BONUS: 'bonus', ROLLBACK: 'rollback' });
+const TX_STATUS = Object.freeze({ PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected', COMPLETED: 'completed', FAILED: 'failed' });
+const SOCKET_EVENTS = Object.freeze({ CURRENT_STATE: 'currentState', JOIN_GAME: 'joinGame', LEAVE_GAME: 'leaveGame', BUY_CARD: 'buyCard', NUMBER_CALLED: 'numberCalled', COUNTDOWN: 'countdown', GAME_STARTED: 'gameStarted', GAME_FINISHED: 'gameFinished', CLAIM_BINGO: 'claimBingo', BINGO_WINNER: 'bingoWinner', CLAIM_FAILED: 'claimFailed', WALLET_UPDATED: 'walletUpdated', CHAT_MESSAGE: 'chatMessage', SYNC_STATE: 'syncState', HEARTBEAT: 'heartbeat' });
+module.exports = { STATES, TX_TYPES, TX_STATUS, SOCKET_EVENTS };

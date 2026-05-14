@@ -1,0 +1,16 @@
+const express = require('express');
+const db = require('../database/db');
+const { adminAuth } = require('../middleware/auth');
+const { atomicBalanceChange } = require('../database/queries/wallet');
+const { toCents, fromCents } = require('../utils/helpers');
+const { TX_TYPES, TX_STATUS } = require('../utils/constants');
+const router=express.Router();
+router.use(adminAuth);
+router.get('/stats', async(req,res,next)=>{ try{ const users=await db.get('SELECT COUNT(*) count, COALESCE(SUM(balance_cents),0) balances FROM users'); const revenue=await db.get("SELECT COALESCE(SUM(-amount_cents),0) revenue FROM transactions WHERE type='card_purchase'"); const pending=await db.all("SELECT COUNT(*) count,type FROM transactions WHERE status='pending' GROUP BY type"); res.json({users:users.count,totalBalances:fromCents(users.balances),grossCardRevenue:fromCents(revenue.revenue),pending}); }catch(e){ next(e); } });
+router.get('/users', async(req,res,next)=>{ try{ res.json({users:await db.all('SELECT id,telegram_id,username,first_name,balance_cents,banned,created_at FROM users ORDER BY id DESC LIMIT 500')}); }catch(e){ next(e); } });
+router.post('/users/:id/ban', async(req,res,next)=>{ try{ await db.run('UPDATE users SET banned=? WHERE id=?',[req.body.banned?1:0,req.params.id]); res.json({ok:true}); }catch(e){ next(e); } });
+router.post('/users/:id/adjust', async(req,res,next)=>{ try{ const tx=await atomicBalanceChange(Number(req.params.id), TX_TYPES.ADJUSTMENT, toCents(req.body.amount), `admin-adjust:${req.params.id}:${Date.now()}`, {note:req.body.note||''}); res.json({transaction:tx}); }catch(e){ next(e); } });
+router.get('/transactions', async(req,res,next)=>{ try{ res.json({transactions:await db.all('SELECT t.*,u.username,u.telegram_id FROM transactions t JOIN users u ON u.id=t.user_id ORDER BY t.created_at DESC LIMIT 500')}); }catch(e){ next(e); } });
+router.post('/deposits/:id/approve', async(req,res,next)=>{ try{ const tx=await db.get('SELECT * FROM transactions WHERE id=? AND type=? AND status=?',[req.params.id,TX_TYPES.DEPOSIT,TX_STATUS.PENDING]); if(!tx) return res.status(404).json({error:'Pending deposit not found'}); const applied=await atomicBalanceChange(tx.user_id, TX_TYPES.DEPOSIT, tx.amount_cents, `deposit-approved:${tx.id}`, {sourceTx:tx.id}); await db.run('UPDATE transactions SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',[TX_STATUS.APPROVED,tx.id]); res.json({ok:true, applied}); }catch(e){ next(e); } });
+router.post('/transactions/:id/reject', async(req,res,next)=>{ try{ await db.run('UPDATE transactions SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',[TX_STATUS.REJECTED,req.params.id]); await db.run('UPDATE withdrawals SET status=?, updated_at=CURRENT_TIMESTAMP WHERE transaction_id=?',[TX_STATUS.REJECTED,req.params.id]); res.json({ok:true}); }catch(e){ next(e); } });
+module.exports=router;
