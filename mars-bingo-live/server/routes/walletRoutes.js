@@ -1,0 +1,12 @@
+const express = require('express');
+const db = require('../database/db');
+const { validateTelegram } = require('../middleware/validateTelegram');
+const { walletLimiter } = require('../middleware/rateLimiter');
+const { atomicBalanceChange } = require('../database/queries/wallet');
+const { toCents, fromCents } = require('../utils/helpers');
+const { TX_TYPES, TX_STATUS } = require('../utils/constants');
+const router=express.Router();
+router.get('/', validateTelegram, (req,res)=>res.json({balance:fromCents(req.user.balance_cents)}));
+router.post('/deposit', walletLimiter, validateTelegram, async(req,res,next)=>{ try{ const amount=toCents(req.body.amount); const ref=String(req.body.reference||`deposit:${req.user.id}:${Date.now()}`).slice(0,128); const tx=await db.transaction(async trx=>{ const before=req.user.balance_cents; await trx.run('INSERT INTO transactions(tx_id,user_id,type,amount_cents,status,balance_before_cents,balance_after_cents,reference,metadata) VALUES(?,?,?,?,?,?,?,?,?)',[require('crypto').randomUUID(),req.user.id,TX_TYPES.DEPOSIT,amount,TX_STATUS.PENDING,before,before,ref,JSON.stringify({method:req.body.method||'telebirr'})]); return trx.get('SELECT * FROM transactions WHERE reference=?',[ref]); }); res.json({transaction:tx}); }catch(e){ next(e); } });
+router.post('/withdraw', walletLimiter, validateTelegram, async(req,res,next)=>{ try{ const amount=toCents(req.body.amount); const destination=String(req.body.destination||'').trim(); if(destination.length<3) return res.status(400).json({error:'Destination required'}); const min=toCents(process.env.MIN_WITHDRAWAL||50); if(amount<min) return res.status(400).json({error:`Minimum withdrawal is ${fromCents(min)}`}); const tx=await atomicBalanceChange(req.user.id, TX_TYPES.WITHDRAWAL, -amount, `withdraw:${req.user.id}:${Date.now()}`, {destination}, TX_STATUS.PENDING); await db.run('INSERT INTO withdrawals(user_id,transaction_id,amount_cents,destination,status) VALUES(?,?,?,?,?)',[req.user.id,tx.id,amount,destination,TX_STATUS.PENDING]); res.json({withdrawal:{amount:fromCents(amount), status:TX_STATUS.PENDING}}); }catch(e){ next(e); } });
+module.exports=router;

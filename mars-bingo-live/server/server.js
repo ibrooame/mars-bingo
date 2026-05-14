@@ -1,0 +1,21 @@
+require('dotenv').config();
+const path = require('path');
+const http = require('http');
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const { Server } = require('socket.io');
+const db = require('./database/db');
+const logger = require('./utils/logger');
+const { apiLimiter } = require('./middleware/rateLimiter');
+const { notFound, errorHandler } = require('./middleware/errorHandler');
+const { BingoEngine } = require('./game/engine');
+const { registerSocketHandlers } = require('./socket/socketHandler');
+const { createGameRoutes } = require('./routes/gameRoutes');
+const authRoutes = require('./routes/authRoutes');
+const walletRoutes = require('./routes/walletRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const transactionRoutes = require('./routes/transactionRoutes');
+const { createBot } = require('./bot/bot');
+async function main(){ await db.initDatabase(); const app=express(); const server=http.createServer(app); const origins=(process.env.CORS_ORIGINS||'*').split(',').map(s=>s.trim()); app.set('trust proxy',1); app.use(helmet({contentSecurityPolicy:false,crossOriginEmbedderPolicy:false})); app.use(cors({origin:origins.includes('*') ? true : origins, credentials:true})); app.use(express.json({limit:'128kb'})); app.use(apiLimiter); app.use(express.static(path.join(__dirname,'public'),{etag:true,maxAge:'5m'})); const io=new Server(server,{cors:{origin:origins.includes('*') ? true : origins, credentials:true}, transports:['websocket','polling'], pingInterval:25000, pingTimeout:20000, maxHttpBufferSize:32_000}); const engine=new BingoEngine(io,{cardPrice:Number(process.env.CARD_PRICE||10), countdownSeconds:Number(process.env.ROUND_COUNTDOWN_SECONDS||20), drawIntervalSeconds:Number(process.env.DRAW_INTERVAL_SECONDS||5), payoutPercent:Number(process.env.PAYOUT_PERCENT||0.9)}); await engine.init(); registerSocketHandlers(io, engine); app.use('/api/auth', authRoutes); app.use('/api/wallet', walletRoutes); app.use('/api/transactions', transactionRoutes); app.use('/api/game', createGameRoutes(engine)); app.use('/api/admin', adminRoutes); app.get('/healthz',(req,res)=>res.json({ok:true, state:engine.state, uptime:process.uptime()})); app.use(notFound); app.use(errorHandler); const bot=createBot(); if(bot) bot.launch().then(()=>logger.info('Telegram bot launched')).catch(e=>logger.error(e)); const port=Number(process.env.PORT||3000); server.listen(port,()=>logger.info(`Mars Bingo Live listening on ${port}`)); async function shutdown(signal){ logger.warn('shutdown',signal); engine.clearTimers(); if(bot) bot.stop(signal); io.close(); server.close(async()=>{ await db.close(); process.exit(0); }); setTimeout(()=>process.exit(1),8000).unref(); } process.on('SIGINT',()=>shutdown('SIGINT')); process.on('SIGTERM',()=>shutdown('SIGTERM')); process.on('uncaughtException',e=>{ logger.error(e); shutdown('uncaughtException'); }); process.on('unhandledRejection',e=>logger.error('unhandledRejection',e)); }
+main().catch(e=>{ logger.error(e); process.exit(1); });

@@ -1,0 +1,22 @@
+const schemaSql = `
+PRAGMA foreign_keys = ON;
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL;
+PRAGMA busy_timeout = 5000;
+CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, telegram_id TEXT UNIQUE NOT NULL, username TEXT, first_name TEXT, last_name TEXT, photo_url TEXT, balance_cents INTEGER NOT NULL DEFAULT 0 CHECK(balance_cents >= 0), banned INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY AUTOINCREMENT, telegram_id TEXT UNIQUE, username TEXT, password_hash TEXT, role TEXT NOT NULL DEFAULT 'admin', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS game_rounds (id INTEGER PRIMARY KEY AUTOINCREMENT, round_code TEXT UNIQUE NOT NULL, state TEXT NOT NULL, called_numbers TEXT NOT NULL DEFAULT '[]', ball_bag TEXT NOT NULL DEFAULT '[]', prize_pool_cents INTEGER NOT NULL DEFAULT 0, card_price_cents INTEGER NOT NULL, winner_user_id INTEGER, winning_card_id INTEGER, started_at TEXT, finished_at TEXT, next_action_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(winner_user_id) REFERENCES users(id), FOREIGN KEY(winning_card_id) REFERENCES bingo_cards(id));
+CREATE TABLE IF NOT EXISTS live_game (id INTEGER PRIMARY KEY CHECK(id=1), active_round_id INTEGER, state TEXT NOT NULL, called_numbers TEXT NOT NULL DEFAULT '[]', countdown_ends_at TEXT, draw_interval_seconds INTEGER NOT NULL DEFAULT 5, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(active_round_id) REFERENCES game_rounds(id));
+CREATE TABLE IF NOT EXISTS bingo_cards (id INTEGER PRIMARY KEY AUTOINCREMENT, round_id INTEGER NOT NULL, user_id INTEGER NOT NULL, card_json TEXT NOT NULL, marked_json TEXT NOT NULL DEFAULT '[]', purchased_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, active INTEGER NOT NULL DEFAULT 1, UNIQUE(round_id,user_id,id), FOREIGN KEY(round_id) REFERENCES game_rounds(id), FOREIGN KEY(user_id) REFERENCES users(id));
+CREATE TABLE IF NOT EXISTS transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, tx_id TEXT UNIQUE NOT NULL, user_id INTEGER NOT NULL, type TEXT NOT NULL, amount_cents INTEGER NOT NULL, status TEXT NOT NULL, balance_before_cents INTEGER NOT NULL, balance_after_cents INTEGER NOT NULL, reference TEXT UNIQUE, metadata TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id));
+CREATE TABLE IF NOT EXISTS withdrawals (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, transaction_id INTEGER, amount_cents INTEGER NOT NULL, destination TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', admin_note TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(transaction_id) REFERENCES transactions(id));
+CREATE TABLE IF NOT EXISTS leaderboard (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL UNIQUE, wins INTEGER NOT NULL DEFAULT 0, total_won_cents INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id));
+CREATE TABLE IF NOT EXISTS daily_bonus (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, bonus_date TEXT NOT NULL, amount_cents INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, bonus_date), FOREIGN KEY(user_id) REFERENCES users(id));
+CREATE TABLE IF NOT EXISTS chat_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, round_id INTEGER, message TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(round_id) REFERENCES game_rounds(id));
+CREATE INDEX IF NOT EXISTS idx_cards_round_user ON bingo_cards(round_id,user_id);
+CREATE INDEX IF NOT EXISTS idx_tx_user_created ON transactions(user_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_round_created ON chat_messages(round_id,created_at DESC);
+INSERT OR IGNORE INTO live_game(id,state,draw_interval_seconds) VALUES(1,'waiting',5);
+`;
+module.exports = { schemaSql };

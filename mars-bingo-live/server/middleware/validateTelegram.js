@@ -1,0 +1,4 @@
+const { validateTelegramInitData } = require('../utils/crypto');
+const { ensureUser } = require('../database/queries/wallet');
+async function validateTelegram(req,res,next){ try{ const initData=req.headers['x-telegram-init-data'] || req.body?.initData || req.query?.initData; if(process.env.NODE_ENV==='development' && req.headers['x-dev-telegram-id']){ req.user=await ensureUser({id:req.headers['x-dev-telegram-id'], username:'dev'}); return next(); } const token=process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN; const result=validateTelegramInitData(initData, token); if(!result.ok) return res.status(401).json({error:result.reason}); req.telegram=result; req.user=await ensureUser(result.user); if(req.user.banned) return res.status(403).json({error:'User banned'}); next(); }catch(e){ next(e); } }
+module.exports = { validateTelegram };
